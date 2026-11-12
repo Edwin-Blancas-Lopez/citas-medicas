@@ -32,7 +32,8 @@ public class CitaServiceImpl implements CitaService{
     private final MedicoClient medicoClient;
     private final PacienteClient pacienteClient;
 
-    private final List<EstadoCita> ESTADOS_ACTIVOS_INVALIDOS = List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO);
+    private final List<EstadoCita> ESTADOS_ACTIVOS_INVALIDOS = List.of(EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO);
+    private final List<EstadoCita> ESTADOS_ACTIVOS_INVALIDOS_PACIENTES = List.of(EstadoCita.PENDIENTE, EstadoCita.CONFIRMADA, EstadoCita.EN_CURSO);
 
 
     @Override
@@ -64,7 +65,7 @@ public class CitaServiceImpl implements CitaService{
         PacienteResponse paciente = obtenerPacienteActivo(request.idPaciente());
 
         validarMedicoActivoDisponible(medico);
-        validarPacienteActivoSinCitasActivas(request.idPaciente());
+        validarPacienteActivoSinCitasActivas(request.idPaciente(), "El paciente no se puede registrar ya que cuenta con una cita en estado PENDIENTE, CONFIRMADA o EN_CURSO.");
 
         Cita cita = citaMapper.requestAEntidad(request);
         citaRepository.saveAndFlush(cita);
@@ -98,7 +99,7 @@ public class CitaServiceImpl implements CitaService{
         }
 
         if (!cita.getIdPaciente().equals(request.idPaciente())) {
-            validarPacienteActivoSinCitasActivas(request.idPaciente());
+            validarPacienteActivoSinCitasActivas(request.idPaciente(), "El paciente no se puede actualizar ya que cuenta con una cita en estado PENDIENTE, CONFIRMADA o EN_CURSO.");
         }
 
         cita.actualizar(
@@ -124,7 +125,9 @@ public class CitaServiceImpl implements CitaService{
 
         log.info("Actualizando estado de la cita con id: {} a {}", idCita, nuevoEstado);
 
-        validarTransicionEstado(cita.getEstadoCita(), nuevoEstado);
+        //validarTransicionEstado(cita.getEstadoCita(), nuevoEstado);
+
+        validarMedicoSinOtrasCitasActivas(cita.getIdMedico(), idCita);
 
         cita.actualizarEstadoCita(nuevoEstado);
         citaRepository.saveAndFlush(cita);
@@ -146,7 +149,7 @@ public class CitaServiceImpl implements CitaService{
 
     @Override
     public void pacienteTieneCitasAsignadas(Long idPaciente) {
-        validarPacienteActivoSinCitasActivas(idPaciente);
+        validarPacienteActivoSinCitasActivas(idPaciente, "");
     }
 
     @Override
@@ -214,27 +217,20 @@ public class CitaServiceImpl implements CitaService{
             throw new ConflictoException("El medico activo no esta disponible para consulta");
     }
 
-    private void validarPacienteActivoSinCitasActivas(Long idPaciente){
+    private void validarPacienteActivoSinCitasActivas(Long idPaciente, String mensaje){
         log.info("Validando si el paciente acivo no tiene citas..");
 
         if (citaRepository.existsByIdPacienteAndEstadoRegistroAndEstadoCitaIn(
-                idPaciente, EstadoRegistro.ACTIVO, ESTADOS_ACTIVOS_INVALIDOS)) {
-            throw new ConflictoException("El paciente no se puede eliminar ya que cuenta con una cita en estado PENDIENTE, CONFIRMADA o EN_CURSO.");
+                idPaciente, EstadoRegistro.ACTIVO, ESTADOS_ACTIVOS_INVALIDOS_PACIENTES)) {
+            throw new ConflictoException(mensaje);
         }
     }
 
-    private void validarTransicionEstado(EstadoCita estadoActual, EstadoCita nuevoEstado) {
-        boolean transicionValida = switch (estadoActual) {
-            case PENDIENTE -> nuevoEstado == EstadoCita.CONFIRMADA || nuevoEstado == EstadoCita.CANCELADA;
-            case CONFIRMADA -> nuevoEstado == EstadoCita.EN_CURSO || nuevoEstado == EstadoCita.CANCELADA;
-            case EN_CURSO -> nuevoEstado == EstadoCita.FINALIZADA;
-            case FINALIZADA, CANCELADA -> false;
-        };
-
-        if (!transicionValida) {
-            throw new ConflictoException(
-                    String.format("No se permite cambiar el estado de la cita de [%s] a [%s]", estadoActual, nuevoEstado)
-            );
+    private void validarMedicoSinOtrasCitasActivas(Long idMedico, Long idCitaActual) {
+        log.info("Validando si el medico con id {} tiene otras citas activas...", idMedico);
+        if (citaRepository.existsByIdMedicoAndEstadoRegistroAndEstadoCitaInAndIdNot(
+                idMedico, EstadoRegistro.ACTIVO, ESTADOS_ACTIVOS_INVALIDOS, idCitaActual)) {
+            throw new ConflictoException("El médico tiene otra cita activa en curso, confirmada o pendiente.");
         }
     }
 
