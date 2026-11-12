@@ -102,9 +102,9 @@ public class MedicoServiceImpl implements MedicoService{
 
         DisponibilidadMedico nuevaDisponibilidad = DisponibilidadMedico.obtenerDisponibilidadPorCodigo(idDisponibilidad);
 
-        if (DisponibilidadMedico.DISPONIBLE.equals(nuevaDisponibilidad)) {
+        /*if (DisponibilidadMedico.DISPONIBLE.equals(nuevaDisponibilidad)) {
             validarMedicoTieneCitasAgendadas(idMedico);
-        }
+        }*/
 
         DisponibilidadMedico disponibilidadAnterior = medico.getDisponibilidad();
 
@@ -178,7 +178,7 @@ public class MedicoServiceImpl implements MedicoService{
     }
 
     private void validarMedicoTieneCitasAgendadas(Long id){
-        log.info("Validando si el medico con id {} tiene citas agendadas en servicio remoto..." + id);
+        log.info("Validando si el medico con id {} tiene citas agendadas en servicio remoto...", id);
 
         citaClient.medicoTieneCitasAsignadas(id);
     }
